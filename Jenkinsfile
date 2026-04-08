@@ -8,7 +8,7 @@ pipeline {
     environment {
         VENV_DIR = ".venv"
 
-        // SonarQube (Jenkins MASTER private IP)
+        // SonarQube
         SONAR_HOST_URL = "http://10.0.1.116:9000"
         SONAR_SCANNER  = "/opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner"
 
@@ -54,7 +54,7 @@ pipeline {
             }
         }
 
-        stage('Unit Tests (non-blocking)') {
+        stage('Unit Tests') {
             steps {
                 sh '''
                 . ${VENV_DIR}/bin/activate
@@ -80,48 +80,24 @@ pipeline {
             }
         }
 
-        /* ==============================
-           FIXED: Push Wheel to Nexus
-           (NON-BLOCKING, Jenkins-safe)
-           ============================== */
         stage('Push Wheel to Nexus') {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'nexus_pypi_creds',
+                        credentialsId: 'nexus-pypi-creds-v1',
                         usernameVariable: 'NEXUS_USER',
                         passwordVariable: 'NEXUS_PASS'
                     )
                 ]) {
-                    script {
-                        def status = sh(
-                            script: """
-                            . ${VENV_DIR}/bin/activate
-                            twine upload \
-                              --repository-url http://${NEXUS_IP}:8081/repository/python-repo/ \
-                              -u ${NEXUS_USER} \
-                              -p ${NEXUS_PASS} \
-                              dist/*.whl
-                            """,
-                            returnStatus: true
-                        )
-
-                        if (status != 0) {
-                            echo "Wheel already exists or Nexus rejected redeploy — continuing pipeline"
-                        }
-                    }
+                    sh '''
+                    . ${VENV_DIR}/bin/activate
+                    twine upload \
+                      --repository-url http://${NEXUS_IP}:8081/repository/python-repo/ \
+                      -u ${NEXUS_USER} \
+                      -p ${NEXUS_PASS} \
+                      dist/*.whl
+                    '''
                 }
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                sh '''
-                GIT_SHA=$(git rev-parse --short HEAD)
-                IMAGE_TAG=${BUILD_NUMBER}-${GIT_SHA}
-
-                docker build -t flask-ci:${IMAGE_TAG} .
-                '''
             }
         }
 
@@ -129,7 +105,7 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'nexus_docker_creds',
+                        credentialsId: 'nexus-pypi-creds-v1',
                         usernameVariable: 'NEXUS_USER',
                         passwordVariable: 'NEXUS_PASS'
                     )
@@ -138,14 +114,14 @@ pipeline {
                     GIT_SHA=$(git rev-parse --short HEAD)
                     IMAGE_TAG=${BUILD_NUMBER}-${GIT_SHA}
 
-                    docker login ${NEXUS_IP}:8082 \
+                    docker login 13.233.100.158:8082 \
                       -u ${NEXUS_USER} \
                       -p ${NEXUS_PASS}
 
                     docker tag flask-ci:${IMAGE_TAG} \
-                      ${NEXUS_IP}:8082/flask:${IMAGE_TAG}
+                      13.233.100.158:8082/flask:${IMAGE_TAG}
 
-                    docker push ${NEXUS_IP}:8082/flask:${IMAGE_TAG}
+                    docker push 13.233.100.158:8082/flask:${IMAGE_TAG}
                     '''
                 }
             }
