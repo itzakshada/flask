@@ -39,18 +39,22 @@ pipeline {
             }
         }
 
-        stage('Unit Tests') {
-            steps {
-                sh '''
-                . .venv/bin/activate
-                pytest || true
-                '''
-            }
-        }
+       
+stage('Unit Tests') {
+    steps {
+        sh '''
+        python3 -m venv .venv || true
+        . .venv/bin/activate
+        pip install --upgrade pip pytest
+        pytest || true
+        '''
+    }
+}
+
 
         stage('SonarQube Scan') {
             steps {
-                withCredentials([string(credentialsId: 'sonar-token-01', variable: 'SONAR_TOKEN')]) {
+                withCredentials([string(credentialsId: 'sonar-token-02', variable: 'SONAR_TOKEN')]) {
                     sh '''
                     /opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner \
                       -Dsonar.projectKey=flask \
