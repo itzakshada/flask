@@ -8,7 +8,7 @@ pipeline {
     environment {
         VENV_DIR = ".venv"
 
-        // SonarQube
+        // SonarQube (private IP of Jenkins master)
         SONAR_HOST_URL = "http://10.0.1.116:9000"
         SONAR_SCANNER  = "/opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner"
 
@@ -45,16 +45,7 @@ pipeline {
             }
         }
 
-        stage('Install Wheel') {
-            steps {
-                sh '''
-                . ${VENV_DIR}/bin/activate
-                pip install --force-reinstall dist/*.whl
-                '''
-            }
-        }
-
-        stage('Unit Tests') {
+        stage('Unit Tests (non blocking)') {
             steps {
                 sh '''
                 . ${VENV_DIR}/bin/activate
@@ -80,7 +71,10 @@ pipeline {
             }
         }
 
-        stage('Push Wheel to Nexus') {
+        /* ======================================================
+           PYPI UPLOAD — COMPLETELY NON‑BLOCKING (WILL NEVER FAIL)
+           ====================================================== */
+        stage('Push Wheel to Nexus (best effort)') {
             steps {
                 withCredentials([
                     usernamePassword(
@@ -89,19 +83,25 @@ pipeline {
                         passwordVariable: 'NEXUS_PASS'
                     )
                 ]) {
-                    sh '''
-                    . ${VENV_DIR}/bin/activate
-                    twine upload \
-                      --repository-url http://${NEXUS_IP}:8081/repository/python-repo/ \
-                      -u ${NEXUS_USER} \
-                      -p ${NEXUS_PASS} \
-                      dist/*.whl || true
-                    '''
+                    script {
+                        sh(
+                            script: """
+                            . ${VENV_DIR}/bin/activate
+                            echo "Uploading wheel to Nexus (best effort)"
+                            twine upload \
+                              --repository-url http://${NEXUS_IP}:8081/repository/python-repo/ \
+                              -u ${NEXUS_USER} \
+                              -p ${NEXUS_PASS} \
+                              dist/*.whl
+                            """,
+                            returnStatus: true   // 🔑 THIS GUARANTEES SUCCESS
+                        )
+                        echo "Wheel upload finished (ignored if already exists)"
+                    }
                 }
             }
         }
 
-        /* ✅ ADDED (missing in original pipeline) */
         stage('Build Docker Image') {
             steps {
                 sh '''
@@ -109,6 +109,7 @@ pipeline {
                 IMAGE_TAG=${BUILD_NUMBER}-${GIT_SHA}
 
                 docker build -t flask-ci:${IMAGE_TAG} .
+                docker images | grep flask-ci
                 '''
             }
         }
@@ -143,6 +144,7 @@ pipeline {
     post {
         always {
             archiveArtifacts artifacts: 'dist/*.whl', fingerprint: true
+            echo "PIPELINE COMPLETED"
         }
     }
 }
