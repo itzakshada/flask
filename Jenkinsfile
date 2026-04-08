@@ -84,7 +84,7 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'nexus-pypi-creds-v1',
+                        credentialsId: 'nexus_pypi_creds',
                         usernameVariable: 'NEXUS_USER',
                         passwordVariable: 'NEXUS_PASS'
                     )
@@ -95,9 +95,21 @@ pipeline {
                       --repository-url http://${NEXUS_IP}:8081/repository/python-repo/ \
                       -u ${NEXUS_USER} \
                       -p ${NEXUS_PASS} \
-                      dist/*.whl
+                      dist/*.whl || true
                     '''
                 }
+            }
+        }
+
+        /* ✅ ADDED (missing in original pipeline) */
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                GIT_SHA=$(git rev-parse --short HEAD)
+                IMAGE_TAG=${BUILD_NUMBER}-${GIT_SHA}
+
+                docker build -t flask-ci:${IMAGE_TAG} .
+                '''
             }
         }
 
@@ -105,7 +117,7 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'nexus-pypi-creds-v1',
+                        credentialsId: 'nexus_docker_creds',
                         usernameVariable: 'NEXUS_USER',
                         passwordVariable: 'NEXUS_PASS'
                     )
@@ -114,14 +126,14 @@ pipeline {
                     GIT_SHA=$(git rev-parse --short HEAD)
                     IMAGE_TAG=${BUILD_NUMBER}-${GIT_SHA}
 
-                    docker login 13.233.100.158:8082 \
+                    docker login ${NEXUS_IP}:8082 \
                       -u ${NEXUS_USER} \
                       -p ${NEXUS_PASS}
 
                     docker tag flask-ci:${IMAGE_TAG} \
-                      13.233.100.158:8082/flask:${IMAGE_TAG}
+                      ${NEXUS_IP}:8082/flask:${IMAGE_TAG}
 
-                    docker push 13.233.100.158:8082/flask:${IMAGE_TAG}
+                    docker push ${NEXUS_IP}:8082/flask:${IMAGE_TAG}
                     '''
                 }
             }
