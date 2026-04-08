@@ -84,7 +84,7 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'nexus_pypi_creds',
+                        credentialsId: 'nexus-pypi-creds-v1',
                         usernameVariable: 'NEXUS_USER',
                         passwordVariable: 'NEXUS_PASS'
                     )
