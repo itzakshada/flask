@@ -7,8 +7,13 @@ pipeline {
 
     environment {
         VENV_DIR = ".venv"
-        SONAR_HOST = "http://10.0.1.116:9000"   // Jenkins MASTER private IP
-        SONAR_SCANNER = "/opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner"
+
+        // SonarQube
+        SONAR_HOST_URL = "http://10.0.1.116:9000"
+        SONAR_SCANNER  = "/opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner"
+
+        // Nexus
+        NEXUS_IP = "13.233.100.158"
     }
 
     stages {
@@ -68,7 +73,7 @@ pipeline {
                       -Dsonar.projectKey=flask \
                       -Dsonar.sources=src \
                       -Dsonar.tests=tests \
-                      -Dsonar.host.url=${SONAR_HOST} \
+                      -Dsonar.host.url=${SONAR_HOST_URL} \
                       -Dsonar.login=${SONAR_TOKEN}
                     '''
                 }
@@ -79,7 +84,7 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'nexus_pypi_creds',
+                        credentialsId: 'nexus-pypi-creds',
                         usernameVariable: 'NEXUS_USER',
                         passwordVariable: 'NEXUS_PASS'
                     )
@@ -87,7 +92,7 @@ pipeline {
                     sh '''
                     . ${VENV_DIR}/bin/activate
                     twine upload \
-                      --repository-url http://13.233.100.158:8081/repository/python-repo/ \
+                      --repository-url http://${NEXUS_IP}:8081/repository/python-repo/ \
                       -u ${NEXUS_USER} \
                       -p ${NEXUS_PASS} \
                       dist/*.whl
@@ -95,33 +100,36 @@ pipeline {
                 }
             }
         }
-	stage('Push Docker Image to Nexus') {
-    steps {
-        withCredentials([
-            usernamePassword(
-                credentialsId: 'nexus-docker-creds',
-                usernameVariable: 'NEXUS_USER',
-                passwordVariable: 'NEXUS_PASS'
-            )
-        ]) {
-            sh '''
-            GIT_SHA=$(git rev-parse --short HEAD)
-            IMAGE_TAG=${BUILD_NUMBER}-${GIT_SHA}
 
-            docker login 13.233.100.158:8082 \
-              -u ${NEXUS_USER} \
-              -p ${NEXUS_PASS}
+        stage('Push Docker Image to Nexus') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'nexus-docker-creds',
+                        usernameVariable: 'NEXUS_USER',
+                        passwordVariable: 'NEXUS_PASS'
+                    )
+                ]) {
+                    sh '''
+                    GIT_SHA=$(git rev-parse --short HEAD)
+                    IMAGE_TAG=${BUILD_NUMBER}-${GIT_SHA}
 
-            docker tag flask-ci:${IMAGE_TAG} \
-              13.233.100.158:8082/flask:${IMAGE_TAG}
+                    echo "Logging into Nexus Docker registry"
+                    docker login ${NEXUS_IP}:8082 \
+                      -u ${NEXUS_USER} \
+                      -p ${NEXUS_PASS}
 
-            docker push 13.233.100.158:8082/flask:${IMAGE_TAG}
-            '''
+                    docker tag flask-ci:${IMAGE_TAG} \
+                      ${NEXUS_IP}:8082/flask:${IMAGE_TAG}
+
+                    docker push ${NEXUS_IP}:8082/flask:${IMAGE_TAG}
+                    '''
+                }
+            }
         }
     }
-}
 
-      post {
+    post {
         always {
             archiveArtifacts artifacts: 'dist/*.whl', fingerprint: true
         }
