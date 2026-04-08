@@ -49,20 +49,20 @@ pipeline {
         }
 
         stage('SonarQube Scan') {
-            steps {
-                withCredentials([string(credentialsId: 'sonar-token-01', variable: 'SONAR_TOKEN')]) {
-                    sh '''
-                    sonar-scanner \
-                      -Dsonar.projectKey=flask \
-                      -Dsonar.sources=src \
-                      -Dsonar.tests=tests \
-                      -Dsonar.host.url=http://65.0.27.253:9000 \
-                      -Dsonar.login=$SONAR_TOKEN
-                    '''
-                }
-            }
+    steps {
+        withCredentials([string(credentialsId: 'sonar-token-01', variable: 'SONAR_TOKEN')]) {
+            sh '''
+            /opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner \
+              -Dsonar.projectKey=flask \
+              -Dsonar.sources=src \
+              -Dsonar.tests=tests \
+              -Dsonar.host.url=http://65.0.27.253:9000 \
+              -Dsonar.login=$SONAR_TOKEN
+            '''
         }
-    }
+ 
+   }
+}
 
     post {
         always {
