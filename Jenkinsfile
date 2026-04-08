@@ -1,6 +1,16 @@
 pipeline {
     agent { label 'jenkins-agent' }
 
+    options {
+        timestamps()
+    }
+
+    environment {
+        VENV_DIR = ".venv"
+        SONAR_HOST = "http://10.0.1.116:9000"   // Jenkins MASTER private IP
+        SONAR_SCANNER = "/opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner"
+    }
+
     stages {
 
         stage('Checkout Code') {
@@ -12,8 +22,8 @@ pipeline {
         stage('Create Virtualenv & Install Tools') {
             steps {
                 sh '''
-                python3 -m venv .venv
-                . .venv/bin/activate
+                python3 -m venv ${VENV_DIR}
+                . ${VENV_DIR}/bin/activate
                 pip install --upgrade pip
                 pip install build pytest twine
                 '''
@@ -23,7 +33,7 @@ pipeline {
         stage('Build Wheel') {
             steps {
                 sh '''
-                . .venv/bin/activate
+                . ${VENV_DIR}/bin/activate
                 python -m build --wheel
                 ls -l dist
                 '''
@@ -33,77 +43,75 @@ pipeline {
         stage('Install Wheel') {
             steps {
                 sh '''
-                . .venv/bin/activate
-                pip install dist/*.whl
+                . ${VENV_DIR}/bin/activate
+                pip install --force-reinstall dist/*.whl
                 '''
             }
         }
 
-       
-stage('Unit Tests') {
-    steps {
-        sh '''
-        python3 -m venv .venv || true
-        . .venv/bin/activate
-        pip install --upgrade pip pytest
-        pytest || true
-        '''
-    }
-}
-
+        stage('Unit Tests (non-blocking)') {
+            steps {
+                sh '''
+                . ${VENV_DIR}/bin/activate
+                pytest || true
+                '''
+            }
+        }
 
         stage('SonarQube Scan') {
             steps {
-                withCredentials([string(credentialsId: 'sonar-token-02', variable: 'SONAR_TOKEN')]) {
+                withCredentials([
+                    string(credentialsId: 'sonar-token-01', variable: 'SONAR_TOKEN')
+                ]) {
                     sh '''
-                    /opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner \
+                    ${SONAR_SCANNER} \
                       -Dsonar.projectKey=flask \
                       -Dsonar.sources=src \
                       -Dsonar.tests=tests \
-                      -Dsonar.host.url=http://10.0.1.116:9000
-                      -Dsonar.login=$SONAR_TOKEN
+                      -Dsonar.host.url=${SONAR_HOST} \
+                      -Dsonar.login=${SONAR_TOKEN}
                     '''
                 }
             }
         }
 
-        /* =========================
-           NEXUS PYPI PUSH (WHEEL)
-           ========================= */
         stage('Push Wheel to Nexus') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'nexus-pypi-creds',
-                    usernameVariable: 'NEXUS_USER',
-                    passwordVariable: 'NEXUS_PASS'
-                )]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'nexus-pypi-creds',
+                        usernameVariable: 'NEXUS_USER',
+                        passwordVariable: 'NEXUS_PASS'
+                    )
+                ]) {
                     sh '''
-                    . .venv/bin/activate
+                    . ${VENV_DIR}/bin/activate
                     twine upload \
                       --repository-url http://13.233.100.158:8081/repository/python-repo/ \
-                      -u $NEXUS_USER \
-                      -p $NEXUS_PASS \
+                      -u ${NEXUS_USER} \
+                      -p ${NEXUS_PASS} \
                       dist/*.whl
                     '''
                 }
             }
         }
 
-        /* =========================
-           NEXUS DOCKER PUSH
-           ========================= */
         stage('Push Docker Image to Nexus') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'nexus-docker-creds',
-                    usernameVariable: 'NEXUS_USER',
-                    passwordVariable: 'NEXUS_PASS'
-                )]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'nexus-docker-creds',
+                        usernameVariable: 'NEXUS_USER',
+                        passwordVariable: 'NEXUS_PASS'
+                    )
+                ]) {
                     sh '''
                     GIT_SHA=$(git rev-parse --short HEAD)
                     IMAGE_TAG=${BUILD_NUMBER}-${GIT_SHA}
 
-                    docker login 13.233.100.158:8082 -u $NEXUS_USER -p $NEXUS_PASS
+                    docker login 13.233.100.158:8082 \
+                      -u ${NEXUS_USER} \
+                      -p ${NEXUS_PASS}
 
                     docker tag flask-ci:${IMAGE_TAG} \
                       13.233.100.158:8082/flask:${IMAGE_TAG}
@@ -121,4 +129,3 @@ stage('Unit Tests') {
         }
     }
 }
-
