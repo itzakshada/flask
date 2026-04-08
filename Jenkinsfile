@@ -8,7 +8,7 @@ pipeline {
     environment {
         VENV_DIR = ".venv"
 
-        // SonarQube (private IP of Jenkins master)
+        // SonarQube
         SONAR_HOST_URL = "http://10.0.1.116:9000"
         SONAR_SCANNER  = "/opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner"
 
@@ -30,7 +30,7 @@ pipeline {
                 python3 -m venv ${VENV_DIR}
                 . ${VENV_DIR}/bin/activate
                 pip install --upgrade pip
-                pip install build pytest twine
+                pip install build pytest
                 '''
             }
         }
@@ -67,37 +67,6 @@ pipeline {
                       -Dsonar.host.url=${SONAR_HOST_URL} \
                       -Dsonar.login=${SONAR_TOKEN}
                     '''
-                }
-            }
-        }
-
-        /* ======================================================
-           PYPI UPLOAD — COMPLETELY NON‑BLOCKING (WILL NEVER FAIL)
-           ====================================================== */
-        stage('Push Wheel to Nexus (best effort)') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'nexus_pypi_creds',
-                        usernameVariable: 'NEXUS_USER',
-                        passwordVariable: 'NEXUS_PASS'
-                    )
-                ]) {
-                    script {
-                        sh(
-                            script: """
-                            . ${VENV_DIR}/bin/activate
-                            echo "Uploading wheel to Nexus (best effort)"
-                            twine upload \
-                              --repository-url http://${NEXUS_IP}:8081/repository/python-repo/ \
-                              -u ${NEXUS_USER} \
-                              -p ${NEXUS_PASS} \
-                              dist/*.whl
-                            """,
-                            returnStatus: true   // 🔑 THIS GUARANTEES SUCCESS
-                        )
-                        echo "Wheel upload finished (ignored if already exists)"
-                    }
                 }
             }
         }
@@ -144,7 +113,7 @@ pipeline {
     post {
         always {
             archiveArtifacts artifacts: 'dist/*.whl', fingerprint: true
-            echo "PIPELINE COMPLETED"
+            echo "PIPELINE COMPLETED SUCCESSFULLY"
         }
     }
 }
