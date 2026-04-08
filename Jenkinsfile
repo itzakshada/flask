@@ -92,6 +92,7 @@ pipeline {
                     sh '''
                     . ${VENV_DIR}/bin/activate
                     twine upload \
+		      --skip-existing \
                       --repository-url http://${NEXUS_IP}:8081/repository/python-repo/ \
                       -u ${NEXUS_USER} \
                       -p ${NEXUS_PASS} \
@@ -105,7 +106,7 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'nexus-docker-creds',
+                        credentialsId: 'nexus-pypi-creds-v1',
                         usernameVariable: 'NEXUS_USER',
                         passwordVariable: 'NEXUS_PASS'
                     )
