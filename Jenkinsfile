@@ -95,35 +95,33 @@ pipeline {
                 }
             }
         }
+	stage('Push Docker Image to Nexus') {
+    steps {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'nexus-docker-creds',
+                usernameVariable: 'NEXUS_USER',
+                passwordVariable: 'NEXUS_PASS'
+            )
+        ]) {
+            sh '''
+            GIT_SHA=$(git rev-parse --short HEAD)
+            IMAGE_TAG=${BUILD_NUMBER}-${GIT_SHA}
 
-        stage('Push Docker Image to Nexus') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'nexus-docker-creds',
-                        usernameVariable: 'NEXUS_USER',
-                        passwordVariable: 'NEXUS_PASS'
-                    )
-                ]) {
-                    sh '''
-                    GIT_SHA=$(git rev-parse --short HEAD)
-                    IMAGE_TAG=${BUILD_NUMBER}-${GIT_SHA}
+            docker login 13.233.100.158:8082 \
+              -u ${NEXUS_USER} \
+              -p ${NEXUS_PASS}
 
-                    docker login 13.233.100.158:8082 \
-                      -u ${NEXUS_USER} \
-                      -p ${NEXUS_PASS}
+            docker tag flask-ci:${IMAGE_TAG} \
+              13.233.100.158:8082/flask:${IMAGE_TAG}
 
-                    docker tag flask-ci:${IMAGE_TAG} \
-                      13.233.100.158:8082/flask:${IMAGE_TAG}
-
-                    docker push 13.233.100.158:8082/flask:${IMAGE_TAG}
-                    '''
-                }
-            }
+            docker push 13.233.100.158:8082/flask:${IMAGE_TAG}
+            '''
         }
     }
+}
 
-    post {
+      post {
         always {
             archiveArtifacts artifacts: 'dist/*.whl', fingerprint: true
         }
