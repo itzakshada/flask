@@ -47,6 +47,21 @@ pipeline {
                 '''
             }
         }
+
+        stage('SonarQube Scan') {
+            steps {
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                    sh '''
+                    sonar-scanner \
+                      -Dsonar.projectKey=flask \
+                      -Dsonar.sources=src \
+                      -Dsonar.tests=tests \
+                      -Dsonar.host.url=http://65.0.27.253:9000 \
+                      -Dsonar.login=$SONAR_TOKEN
+                    '''
+                }
+            }
+        }
     }
 
     post {
