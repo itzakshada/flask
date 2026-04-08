@@ -8,7 +8,7 @@ pipeline {
     environment {
         VENV_DIR = ".venv"
 
-        // SonarQube
+        // SonarQube (Jenkins MASTER private IP)
         SONAR_HOST_URL = "http://10.0.1.116:9000"
         SONAR_SCANNER  = "/opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner"
 
@@ -84,7 +84,7 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'nexus-pypi-creds-v1',
+                        credentialsId: 'nexus_pypi_creds',
                         usernameVariable: 'NEXUS_USER',
                         passwordVariable: 'NEXUS_PASS'
                     )
@@ -92,7 +92,7 @@ pipeline {
                     sh '''
                     . ${VENV_DIR}/bin/activate
                     twine upload \
-		      --repository-url http://${NEXUS_IP}:8081/repository/python-repo/ \
+                      --repository-url http://${NEXUS_IP}:8081/repository/python-repo/ \
                       -u ${NEXUS_USER} \
                       -p ${NEXUS_PASS} \
                       dist/*.whl
@@ -101,11 +101,22 @@ pipeline {
             }
         }
 
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                GIT_SHA=$(git rev-parse --short HEAD)
+                IMAGE_TAG=${BUILD_NUMBER}-${GIT_SHA}
+
+                docker build -t flask-ci:${IMAGE_TAG} .
+                '''
+            }
+        }
+
         stage('Push Docker Image to Nexus') {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'nexus-pypi-creds-v1',
+                        credentialsId: 'nexus_docker_creds',
                         usernameVariable: 'NEXUS_USER',
                         passwordVariable: 'NEXUS_PASS'
                     )
@@ -114,7 +125,6 @@ pipeline {
                     GIT_SHA=$(git rev-parse --short HEAD)
                     IMAGE_TAG=${BUILD_NUMBER}-${GIT_SHA}
 
-                    echo "Logging into Nexus Docker registry"
                     docker login ${NEXUS_IP}:8082 \
                       -u ${NEXUS_USER} \
                       -p ${NEXUS_PASS}
