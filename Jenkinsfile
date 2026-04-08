@@ -92,8 +92,7 @@ pipeline {
                     sh '''
                     . ${VENV_DIR}/bin/activate
                     twine upload \
-		      --skip-existing \
-                      --repository-url http://${NEXUS_IP}:8081/repository/python-repo/ \
+		      --repository-url http://${NEXUS_IP}:8081/repository/python-repo/ \
                       -u ${NEXUS_USER} \
                       -p ${NEXUS_PASS} \
                       dist/*.whl
