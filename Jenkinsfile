@@ -60,7 +60,7 @@ stage('Unit Tests') {
                       -Dsonar.projectKey=flask \
                       -Dsonar.sources=src \
                       -Dsonar.tests=tests \
-                      -Dsonar.host.url=http://65.0.27.253:9000 \
+                      -Dsonar.host.url=http://10.0.1.116:9000
                       -Dsonar.login=$SONAR_TOKEN
                     '''
                 }
